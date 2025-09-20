@@ -7,18 +7,6 @@
   },
   "routes": [
     {
-      "src": "/google77cd707098d48f23.html",
-      "dest": "/google77cd707098d48f23.html"
-    },
-    {
-      "src": "/sitemap.xml",
-      "dest": "/static/sitemap.xml"
-    },
-    {
-      "src": "/robots.txt",
-      "dest": "/static/robots.txt"
-    },
-    {
       "src": "/(.*)",
       "dest": "api/index_minimal.py"
     }
