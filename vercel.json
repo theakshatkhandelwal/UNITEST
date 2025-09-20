@@ -25,5 +25,6 @@
   ],
   "env": {
     "FLASK_ENV": "production"
-  }
+  },
+  "buildCommand": "pip install -r requirements_vercel.txt"
 }

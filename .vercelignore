@@ -1,0 +1,56 @@
+# Virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# Documentation that's not needed for deployment
+*.md
+!README.md
+
+# Large data files
+*.csv
+*.json
+!package.json
+!vercel.json
+
+# Backup files
+*.bak
+*.backup
