@@ -24,9 +24,6 @@
     }
   ],
   "env": {
-    "SECRET_KEY": "@secret_key",
-    "GOOGLE_AI_API_KEY": "@google_ai_api_key",
-    "DATABASE_URL": "@database_url",
     "FLASK_ENV": "production"
   }
 }
