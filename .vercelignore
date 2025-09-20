@@ -54,3 +54,15 @@ tests/
 # Backup files
 *.bak
 *.backup
+
+# Exclude heavy files and directories
+app.py
+version4.py
+api/index.py
+api/index_light.py
+api/debug.py
+templates/
+static/
+requirements_full.txt
+requirements_vercel.txt
+requirements_light.txt
