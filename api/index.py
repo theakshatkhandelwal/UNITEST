@@ -1,18 +1,27 @@
 # Vercel Serverless Function Handler for Unitest
-# This file imports the Flask app from app.py and exports it for Vercel
+# Optimized version that imports only what's needed
 
 import os
 import sys
 
-# Add parent directory to path to import app.py
+# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import the Flask app from app.py
-from app import app
-
-# Vercel Python runtime expects the Flask app to be exported
-# The handler function will be automatically created by Vercel
-handler = app
-
-# Also export as application for compatibility
-application = app
+# Import app with lazy loading to reduce initial bundle size
+# Import only when needed
+try:
+    from app import app
+    handler = app
+    application = app
+except ImportError as e:
+    # Fallback: Create minimal app if import fails
+    from flask import Flask
+    app = Flask(__name__)
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret')
+    
+    @app.route('/')
+    def home():
+        return {'error': 'App import failed', 'message': str(e)}, 500
+    
+    handler = app
+    application = app

@@ -1,67 +1,48 @@
-# Virtual environment
+# Exclude large files and directories from Vercel deployment
 venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Database files
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+instance/
 *.db
 *.sqlite
 *.sqlite3
-instance/
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
+.env
+.env.local
+test.txt
+test_neon_db.py
+setup_neon_db.py
+version4.py
+ago
+.ds_store
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Logs
 *.log
 logs/
+uploads/
+nltk_data/
+*.pdf
+*.docx
+*.doc
 
-# Temporary files
-*.tmp
-*.temp
-temp/
-
-# Test files
-test_*.py
-*_test.py
-tests/
-
-# Documentation that's not needed for deployment
-*.md
-!README.md
-
-# Large data files
-*.csv
-*.json
-!package.json
-!vercel.json
-
-# Backup files
-*.bak
-*.backup
-
-# Exclude heavy files and directories
-app.py
-version4.py
-api/index.py
-api/index_light.py
-api/debug.py
-templates/
-requirements_full.txt
-requirements_vercel.txt
-requirements_light.txt
+# Exclude development files
+.git/
+.github/
+README.md
+DEPLOYMENT_GUIDE.md
+RAILWAY_DEPLOYMENT_GUIDE.md
+VERCEL_DEPLOYMENT_GUIDE.md
+NEON_VERCEL_DEPLOYMENT.md
+GITHUB_PUSH_GUIDE.md
+SEO_OPTIMIZATION_SUMMARY.md
+VERCEL_ENV_SETUP.md
+push_to_github.ps1
+deploy.py
+deploy_vercel.py
+check_deployment.py
