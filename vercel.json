@@ -1,17 +1,29 @@
 {
   "version": 2,
+  "buildCommand": "echo 'No build step required'",
   "functions": {
-    "api/index_minimal.py": {
-      "maxDuration": 10
+    "api/index.py": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   },
   "routes": [
     {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "api/index_minimal.py"
+      "dest": "api/index.py"
     }
   ],
   "env": {
     "FLASK_ENV": "production"
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.py"
+    }
+  ]
 }

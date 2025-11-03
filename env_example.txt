@@ -1,9 +1,11 @@
 # Flask Configuration
-SECRET_KEY=your-secret-key-here
+SECRET_KEY=your-super-secret-key-here-change-this
 FLASK_ENV=production
 
 # Database Configuration
-DATABASE_URL=sqlite:///unittest.db
+# For Neon DB: postgresql://user:password@host.neon.tech/dbname?sslmode=require
+# For local SQLite: sqlite:///unittest.db
+DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 
-# Google AI API Key
+# Google AI API Key (Gemini)
 GOOGLE_AI_API_KEY=your-google-ai-api-key-here
