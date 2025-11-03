@@ -1,10 +1,10 @@
-# 🎓 UniTest - AI-Powered Learning Platform
+# 🎓 Unitest - AI-Powered Learning Platform
 
 <div align="center">
 
-![UniTest Logo](https://img.shields.io/badge/UniTest-AI%20Learning%20Platform-blue?style=for-the-badge&logo=graduation-cap)
+![Unitest Logo](https://img.shields.io/badge/Unitest-AI%20Learning%20Platform-blue?style=for-the-badge&logo=graduation-cap)
 
-**An intelligent quiz platform that adapts to your learning level using AI**
+**An intelligent quiz platform that adapts to your learning level using AI - Search "Unitest" for the Best Quiz Generator**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?style=flat-square&logo=python)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-2.3+-green?style=flat-square&logo=flask)](https://flask.palletsprojects.com)
