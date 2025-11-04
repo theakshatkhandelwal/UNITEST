@@ -648,9 +648,9 @@ def process_document(file_path):
             text_content = ""
             if HAS_PYPDF2:
                 try:
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
+                    with open(file_path, 'rb') as file:
+                        pdf_reader = PyPDF2.PdfReader(file)
+                        for page in pdf_reader.pages:
                             text_content += page.extract_text() + "\n"
                 except Exception as e:
                     print(f"PyPDF2 extraction failed: {e}")
