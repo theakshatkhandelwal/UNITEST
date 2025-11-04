@@ -6,10 +6,13 @@ python-dotenv==1.0.1
 psycopg2-binary==2.9.9
 Werkzeug==3.0.1
 PyPDF2==3.0.1
-PyMuPDF==1.23.8
-Pillow==10.1.0
-nltk==3.8.1
-pandas==2.1.3
 requests==2.31.0
-# Note: EasyOCR excluded due to size (~500MB models)
-# For production, consider using cloud OCR service
+nltk==3.8.1
+# Minimal dependencies for Vercel deployment
+# Heavy packages excluded to reduce bundle size:
+# - pandas (use CSV module for exports instead)
+# - PyMuPDF (large binary, use PyPDF2 for text PDFs only)
+# - Pillow (only needed for advanced image processing)
+# - EasyOCR (500MB+ models, use cloud OCR service)
+# - pytesseract (requires system binaries)
+# - openpyxl (only needed for XLSX export, use CSV instead)

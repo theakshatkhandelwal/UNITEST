@@ -7,9 +7,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import google.generativeai as genai
 import json
 import re
-import pandas as pd
 import requests
 import time
+# Make pandas optional (only needed for CSV/XLSX exports)
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PANDAS = False
+    pd = None
 # Conditional imports for optional dependencies
 try:
     import PyPDF2
@@ -718,10 +724,16 @@ def process_document(file_path):
                                 print(f"Processing page {i+1}/{len(images)} with EasyOCR...")
                                 try:
                                     # Convert PIL Image to numpy array for EasyOCR
-                                    if isinstance(image, Image.Image):
-                                        image_array = np.array(image)
-                                    else:
-                                        image_array = image
+                                    try:
+                                        import numpy as np
+                                        if isinstance(image, Image.Image):
+                                            image_array = np.array(image)
+                                        else:
+                                            image_array = image
+                                    except ImportError:
+                                        # numpy not available, skip this image
+                                        print("numpy not available for image conversion")
+                                        continue
                                     
                                     # EasyOCR returns list of (bbox, text, confidence)
                                     results = reader.readtext(image_array)
@@ -2515,20 +2527,28 @@ def download_quiz_results_xlsx(code):
             'Submitted At': s.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
         })
     
-    # Create DataFrame and XLSX
-    df = pd.DataFrame(data)
-    xlsx_buffer = io.BytesIO()
-    with pd.ExcelWriter(xlsx_buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name='Quiz Results', index=False)
+    # Create XLSX (requires pandas and openpyxl)
+    if not HAS_PANDAS:
+        flash('XLSX export requires pandas. Please use CSV export instead.', 'error')
+        return redirect(url_for('teacher_quiz_results', code=code))
     
-    xlsx_buffer.seek(0)
-    
-    return send_file(
-        xlsx_buffer,
-        as_attachment=True,
-        download_name=f"Quiz_Results_{quiz.title}_{code}.xlsx",
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+    try:
+        df = pd.DataFrame(data)
+        xlsx_buffer = io.BytesIO()
+        with pd.ExcelWriter(xlsx_buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Quiz Results', index=False)
+        
+        xlsx_buffer.seek(0)
+        
+        return send_file(
+            xlsx_buffer,
+            as_attachment=True,
+            download_name=f"Quiz_Results_{quiz.title}_{code}.xlsx",
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except ImportError:
+        flash('XLSX export requires openpyxl. Please use CSV export instead.', 'error')
+        return redirect(url_for('teacher_quiz_results', code=code))
 
 # Error handlers
 @app.errorhandler(500)
