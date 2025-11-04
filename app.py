@@ -7,15 +7,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import google.generativeai as genai
 import json
 import re
+import pandas as pd
 import requests
 import time
-# Make pandas optional (only needed for CSV/XLSX exports)
-try:
-    import pandas as pd
-    HAS_PANDAS = True
-except ImportError:
-    HAS_PANDAS = False
-    pd = None
 # Conditional imports for optional dependencies
 try:
     import PyPDF2
@@ -54,26 +48,18 @@ except ImportError:
     HAS_TESSERACT = False
 
 # EasyOCR - works without system binaries, better for web deployment
-# Note: Excluded from Vercel deployment due to size limits (~500MB models)
-# For production, consider using cloud OCR services (Google Vision, AWS Textract)
 try:
-    # Check if we're on Vercel (where EasyOCR may not be available)
-    if os.environ.get('VERCEL'):
-        HAS_EASYOCR = False
-        _easyocr_reader = None
-        print("EasyOCR disabled on Vercel (use cloud OCR service for production)")
-    else:
-        import easyocr
-        HAS_EASYOCR = True
-        # Initialize EasyOCR reader (English only, can add more languages)
-        # Cache it to avoid reinitializing
-        _easyocr_reader = None
-        def get_easyocr_reader():
-            global _easyocr_reader
-            if _easyocr_reader is None:
-                print("Initializing EasyOCR reader...")
-                _easyocr_reader = easyocr.Reader(['en'], gpu=False)  # Use GPU if available
-            return _easyocr_reader
+    import easyocr
+    HAS_EASYOCR = True
+    # Initialize EasyOCR reader (English only, can add more languages)
+    # Cache it to avoid reinitializing
+    _easyocr_reader = None
+    def get_easyocr_reader():
+        global _easyocr_reader
+        if _easyocr_reader is None:
+            print("Initializing EasyOCR reader...")
+            _easyocr_reader = easyocr.Reader(['en'], gpu=False)  # Use GPU if available
+        return _easyocr_reader
 except ImportError:
     HAS_EASYOCR = False
     _easyocr_reader = None
@@ -696,8 +682,7 @@ def process_document(file_path):
                                     print(f"convert_from_bytes also failed: {bytes_err}")
                         
                         # If still no images, try PyMuPDF (fitz) as alternative
-                        # Note: PyMuPDF excluded from Vercel due to size, only works locally
-                        if not images and not os.environ.get('VERCEL'):
+                        if not images:
                             try:
                                 import fitz  # PyMuPDF
                                 pdf_document = fitz.open(file_path)
@@ -725,16 +710,11 @@ def process_document(file_path):
                                 print(f"Processing page {i+1}/{len(images)} with EasyOCR...")
                                 try:
                                     # Convert PIL Image to numpy array for EasyOCR
-                                    try:
-                                        import numpy as np
-                                        if isinstance(image, Image.Image):
-                                            image_array = np.array(image)
-                                        else:
-                                            image_array = image
-                                    except ImportError:
-                                        # numpy not available, skip this image
-                                        print("numpy not available for image conversion")
-                                        continue
+                                    import numpy as np
+                                    if isinstance(image, Image.Image):
+                                        image_array = np.array(image)
+                                    else:
+                                        image_array = image
                                     
                                     # EasyOCR returns list of (bbox, text, confidence)
                                     results = reader.readtext(image_array)
@@ -2479,21 +2459,11 @@ def download_quiz_results_csv(code):
             'Submitted At': s.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
         })
     
-    # Create CSV (use pandas if available, otherwise use csv module)
-    if HAS_PANDAS:
-        df = pd.DataFrame(data)
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        csv_data = csv_buffer.getvalue()
-    else:
-        # Manual CSV generation (lightweight, no pandas needed)
-        import csv
-        csv_buffer = io.StringIO()
-        if data:
-            writer = csv.DictWriter(csv_buffer, fieldnames=data[0].keys())
-            writer.writeheader()
-            writer.writerows(data)
-        csv_data = csv_buffer.getvalue()
+    # Create DataFrame and CSV
+    df = pd.DataFrame(data)
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False)
+    csv_data = csv_buffer.getvalue()
     
     # Create BytesIO for send_file
     output = io.BytesIO()
@@ -2538,28 +2508,20 @@ def download_quiz_results_xlsx(code):
             'Submitted At': s.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
         })
     
-    # Create XLSX (requires pandas and openpyxl)
-    if not HAS_PANDAS:
-        flash('XLSX export requires pandas. Please use CSV export instead.', 'error')
-        return redirect(url_for('teacher_quiz_results', code=code))
+    # Create DataFrame and XLSX
+    df = pd.DataFrame(data)
+    xlsx_buffer = io.BytesIO()
+    with pd.ExcelWriter(xlsx_buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Quiz Results', index=False)
     
-    try:
-        df = pd.DataFrame(data)
-        xlsx_buffer = io.BytesIO()
-        with pd.ExcelWriter(xlsx_buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Quiz Results', index=False)
-        
-        xlsx_buffer.seek(0)
-        
-        return send_file(
-            xlsx_buffer,
-            as_attachment=True,
-            download_name=f"Quiz_Results_{quiz.title}_{code}.xlsx",
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-    except ImportError:
-        flash('XLSX export requires openpyxl. Please use CSV export instead.', 'error')
-        return redirect(url_for('teacher_quiz_results', code=code))
+    xlsx_buffer.seek(0)
+    
+    return send_file(
+        xlsx_buffer,
+        as_attachment=True,
+        download_name=f"Quiz_Results_{quiz.title}_{code}.xlsx",
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 # Error handlers
 @app.errorhandler(500)
