@@ -8,12 +8,69 @@ import google.generativeai as genai
 import json
 import re
 import pandas as pd
+import requests
+import time
 # Conditional imports for optional dependencies
 try:
     import PyPDF2
     HAS_PYPDF2 = True
 except ImportError:
     HAS_PYPDF2 = False
+
+try:
+    from pdf2image import convert_from_path
+    HAS_PDF2IMAGE = True
+except ImportError:
+    HAS_PDF2IMAGE = False
+
+try:
+    import pytesseract
+    from PIL import Image
+    HAS_TESSERACT = True
+    # Try to configure Tesseract path if not in PATH (common on Windows)
+    try:
+        # Test if tesseract is accessible
+        pytesseract.get_tesseract_version()
+    except Exception:
+        # Common installation paths
+        import os
+        possible_paths = [
+            r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+            r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+            '/usr/local/bin/tesseract',
+            '/usr/bin/tesseract',
+        ]
+        for path in possible_paths:
+            if os.path.exists(path):
+                pytesseract.pytesseract.tesseract_cmd = path
+                break
+except ImportError:
+    HAS_TESSERACT = False
+
+# EasyOCR - works without system binaries, better for web deployment
+# Note: Excluded from Vercel deployment due to size limits (~500MB models)
+# For production, consider using cloud OCR services (Google Vision, AWS Textract)
+try:
+    # Check if we're on Vercel (where EasyOCR may not be available)
+    if os.environ.get('VERCEL'):
+        HAS_EASYOCR = False
+        _easyocr_reader = None
+        print("EasyOCR disabled on Vercel (use cloud OCR service for production)")
+    else:
+        import easyocr
+        HAS_EASYOCR = True
+        # Initialize EasyOCR reader (English only, can add more languages)
+        # Cache it to avoid reinitializing
+        _easyocr_reader = None
+        def get_easyocr_reader():
+            global _easyocr_reader
+            if _easyocr_reader is None:
+                print("Initializing EasyOCR reader...")
+                _easyocr_reader = easyocr.Reader(['en'], gpu=False)  # Use GPU if available
+            return _easyocr_reader
+except ImportError:
+    HAS_EASYOCR = False
+    _easyocr_reader = None
 
 try:
     import nltk
@@ -76,9 +133,9 @@ if database_url and ('postgresql://' in database_url or 'postgres://' in databas
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_timeout': 20,
-        'max_overflow': 0,
-        'pool_size': 1,
+        'pool_timeout': 30,
+        'max_overflow': 5,
+        'pool_size': 5,
         'connect_args': {
             'sslmode': 'require',
             'connect_timeout': 10,
@@ -86,13 +143,13 @@ if database_url and ('postgresql://' in database_url or 'postgres://' in databas
         }
     }
 else:
-    # SQLite configuration (no SSL settings)
+    # SQLite configuration (no SSL settings) - increased pool for better concurrency
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_timeout': 20,
-        'max_overflow': 0,
-        'pool_size': 1
+        'pool_timeout': 30,
+        'max_overflow': 5,
+        'pool_size': 5
     }
 
 db = SQLAlchemy(app)
@@ -135,8 +192,16 @@ class QuizQuestion(db.Model):
     question = db.Column(db.Text, nullable=False)
     options_json = db.Column(db.Text)  # JSON array for MCQ options like ["A. ...","B. ...","C. ...","D. ..."]
     answer = db.Column(db.String(10))  # For MCQ store letter like 'A'; for subjective can store sample answer
-    qtype = db.Column(db.String(20), default='mcq')  # 'mcq' or 'subjective'
+    qtype = db.Column(db.String(20), default='mcq')  # 'mcq', 'subjective', or 'coding'
     marks = db.Column(db.Integer, default=1)
+    # For coding questions
+    test_cases_json = db.Column(db.Text)  # JSON array of test cases: [{"input": "...", "expected_output": "...", "is_hidden": false}]
+    language_constraints = db.Column(db.Text)  # JSON array of allowed languages: ["python", "java", "cpp", "c"]
+    time_limit_seconds = db.Column(db.Integer)  # Time limit per test case
+    memory_limit_mb = db.Column(db.Integer)  # Memory limit in MB
+    sample_input = db.Column(db.Text)  # Sample input for display
+    sample_output = db.Column(db.Text)  # Sample output for display
+    starter_code = db.Column(db.Text)  # Optional starter code template
 
 class QuizSubmission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -166,6 +231,11 @@ class QuizAnswer(db.Model):
     is_correct = db.Column(db.Boolean)
     ai_score = db.Column(db.Float)  # 0..1 for subjective
     scored_marks = db.Column(db.Float, default=0.0)
+    # For coding questions
+    code_language = db.Column(db.String(20))  # Language used: python, java, cpp, c
+    test_results_json = db.Column(db.Text)  # JSON array of test case results
+    passed_test_cases = db.Column(db.Integer, default=0)
+    total_test_cases = db.Column(db.Integer, default=0)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -207,6 +277,216 @@ def evaluate_subjective_answer(question, student_answer, model_answer):
     except Exception as e:
         print(f"Error in evaluate_subjective_answer: {str(e)}")
         return 0.5  # Default on error
+
+def execute_code(code, language, test_input, time_limit=2, memory_limit=256):
+    """
+    Execute code using Piston API (free, no API key needed)
+    Alternative: Judge0 API
+    """
+    # Try Piston API first (simpler, free)
+    piston_url = "https://emkc.org/api/v2/piston/execute"
+    
+    # Piston language mapping
+    piston_languages = {
+        'python': 'python3',
+        'python3': 'python3',
+        'java': 'java',
+        'cpp': 'cpp',
+        'c': 'c'
+    }
+    
+    piston_lang = piston_languages.get(language.lower(), 'python3')
+    
+    try:
+        payload = {
+            "language": piston_lang,
+            "version": "*",
+            "files": [
+                {
+                    "content": code
+                }
+            ],
+            "stdin": test_input,
+            "args": [],
+            "compile_timeout": 10000,
+            "run_timeout": time_limit * 1000,
+            "compile_memory_limit": memory_limit * 1024 * 1024,
+            "run_memory_limit": memory_limit * 1024 * 1024
+        }
+        
+        response = requests.post(piston_url, json=payload, timeout=15)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('run'):
+                run_result = result['run']
+                if run_result.get('code') == 0:
+                    return {
+                        'status': 'success',
+                        'output': run_result.get('output', '').strip(),
+                        'stderr': run_result.get('stderr', '').strip(),
+                        'time': '',
+                        'memory': ''
+                    }
+                else:
+                    return {
+                        'status': 'error',
+                        'message': 'Runtime Error',
+                        'output': run_result.get('output', '').strip(),
+                        'stderr': run_result.get('stderr', '').strip() or run_result.get('stdout', '')
+                    }
+            elif result.get('compile'):
+                compile_result = result['compile']
+                if compile_result.get('code') != 0:
+                    return {
+                        'status': 'error',
+                        'message': 'Compilation Error',
+                        'output': '',
+                        'stderr': compile_result.get('stderr', '').strip() or compile_result.get('stdout', '')
+                    }
+            
+            # If we get here but no result, try fallback
+            return execute_code_judge0(code, language, test_input, time_limit, memory_limit)
+        else:
+            # Fallback: Try Judge0 if Piston fails
+            return execute_code_judge0(code, language, test_input, time_limit, memory_limit)
+        
+    except requests.exceptions.RequestException:
+        # Fallback to Judge0
+        return execute_code_judge0(code, language, test_input, time_limit, memory_limit)
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Execution error: {str(e)}',
+            'output': '',
+            'stderr': ''
+        }
+
+def execute_code_judge0(code, language, test_input, time_limit=2, memory_limit=256):
+    """Fallback: Execute code using Judge0 API"""
+    language_map = {
+        'python': 71,
+        'python3': 71,
+        'java': 62,
+        'cpp': 54,
+        'c': 50
+    }
+    
+    language_id = language_map.get(language.lower(), 71)
+    
+    # Use Judge0 CE (free community edition)
+    judge0_url = os.environ.get('JUDGE0_API_URL', 'https://ce.judge0.com')
+    
+    try:
+        # Submit
+        submit_url = f"{judge0_url}/submissions"
+        payload = {
+            "source_code": code,
+            "language_id": language_id,
+            "stdin": test_input,
+            "cpu_time_limit": time_limit,
+            "memory_limit": memory_limit * 1024
+        }
+        
+        response = requests.post(submit_url, json=payload, headers={'Content-Type': 'application/json'}, timeout=10)
+        
+        if response.status_code not in [201, 200]:
+            return {
+                'status': 'error',
+                'message': f'API Error: {response.status_code}',
+                'output': '',
+                'stderr': response.text
+            }
+        
+        submission_data = response.json()
+        token = submission_data.get('token')
+        
+        if not token:
+            return {
+                'status': 'error',
+                'message': 'No token received',
+                'output': '',
+                'stderr': ''
+            }
+        
+        # Poll for results
+        for attempt in range(10):
+            time.sleep(0.5)
+            
+            result_url = f"{judge0_url}/submissions/{token}"
+            result_response = requests.get(result_url, timeout=10)
+            
+            if result_response.status_code == 200:
+                result = result_response.json()
+                status_id = result.get('status', {}).get('id', 0)
+                
+                if status_id == 3:  # Accepted
+                    return {
+                        'status': 'success',
+                        'output': result.get('stdout', '').strip(),
+                        'stderr': result.get('stderr', '').strip(),
+                        'time': result.get('time', ''),
+                        'memory': result.get('memory', '')
+                    }
+                elif status_id in [4, 5, 6, 7, 8, 9, 10, 11, 12]:
+                    return {
+                        'status': 'error',
+                        'message': result.get('status', {}).get('description', 'Execution Error'),
+                        'output': result.get('stdout', '').strip(),
+                        'stderr': result.get('stderr', '').strip() or result.get('compile_output', '').strip()
+                    }
+        
+        return {
+            'status': 'error',
+            'message': 'Timeout waiting for execution result',
+            'output': '',
+            'stderr': ''
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Execution error: {str(e)}',
+            'output': '',
+            'stderr': ''
+        }
+
+def run_test_cases(code, language, test_cases, time_limit=2, memory_limit=256):
+    """Run multiple test cases and return results"""
+    results = []
+    passed = 0
+    
+    for test_case in test_cases:
+        test_input = test_case.get('input', '')
+        expected_output = test_case.get('expected_output', '').strip()
+        is_hidden = test_case.get('is_hidden', False)
+        
+        exec_result = execute_code(code, language, test_input, time_limit, memory_limit)
+        
+        if exec_result['status'] == 'success':
+            actual_output = exec_result['output'].strip()
+            is_correct = actual_output == expected_output
+            if is_correct:
+                passed += 1
+        else:
+            actual_output = exec_result.get('stderr', exec_result.get('message', 'Error'))
+            is_correct = False
+        
+        results.append({
+            'input': test_input if not is_hidden else 'Hidden',
+            'expected_output': expected_output if not is_hidden else 'Hidden',
+            'actual_output': actual_output,
+            'is_correct': is_correct,
+            'is_hidden': is_hidden,
+            'error': exec_result.get('message', '') if exec_result['status'] == 'error' else None
+        })
+    
+    return {
+        'results': results,
+        'passed': passed,
+        'total': len(test_cases),
+        'percentage': (passed / len(test_cases) * 100) if test_cases else 0
+    }
 
 def get_difficulty_from_bloom_level(bloom_level):
     """Map Bloom's taxonomy level to difficulty level"""
@@ -262,6 +542,60 @@ def generate_quiz(topic, difficulty_level, question_type="mcq", num_questions=5)
                     ...
                 ]
             """
+        elif question_type == "coding":
+            prompt = f"""
+CRITICAL: You MUST generate exactly {num_questions} coding programming problems on the topic: {topic}
+
+Difficulty Level: {difficulty_level.upper()} ({level_description})
+
+IMPORTANT REQUIREMENTS:
+1. Generate EXACTLY {num_questions} coding problems (not MCQ, not subjective, but actual programming problems)
+2. Each problem MUST have the following structure:
+   - "question": A clear problem statement describing what the student needs to code
+   - "type": MUST be exactly "coding" (not "mcq" or anything else)
+   - "sample_input": Sample input that demonstrates the problem
+   - "sample_output": Expected output for the sample input
+   - "test_cases": An array with at least 3-5 test cases, each with:
+     * "input": The test input as a string
+     * "expected_output": The expected output as a string
+     * "is_hidden": boolean (false for visible test cases, true for hidden ones)
+   - "time_limit_seconds": 2 (default)
+   - "memory_limit_mb": 256 (default)
+   - "starter_code": An object with starter code templates for each language:
+     * "python": Python starter code
+     * "java": Java starter code  
+     * "cpp": C++ starter code
+     * "c": C starter code
+
+3. Problems should be diverse and test different programming concepts related to {topic}
+4. Use randomization seed {random_seed} to ensure variety
+
+EXAMPLE FORMAT (follow this EXACT structure):
+[
+    {{
+        "question": "Write a function to find the maximum element in an array. The function should take an array of integers and return the maximum value.",
+        "type": "coding",
+        "sample_input": "5\n1 3 5 2 4",
+        "sample_output": "5",
+        "test_cases": [
+            {{"input": "3\n1 2 3", "expected_output": "3", "is_hidden": false}},
+            {{"input": "4\n10 5 8 12", "expected_output": "12", "is_hidden": false}},
+            {{"input": "5\n-1 -5 -3 -2 -4", "expected_output": "-1", "is_hidden": true}},
+            {{"input": "1\n42", "expected_output": "42", "is_hidden": true}}
+        ],
+        "time_limit_seconds": 2,
+        "memory_limit_mb": 256,
+        "starter_code": {{
+            "python": "def find_max(arr):\\n    # Your code here\\n    pass",
+            "java": "public class Solution {{\\n    public static int findMax(int[] arr) {{\\n        // Your code here\\n        return 0;\\n    }}\\n}}",
+            "cpp": "#include <iostream>\\n#include <vector>\\nusing namespace std;\\n\\nint findMax(vector<int>& arr) {{\\n    // Your code here\\n    return 0;\\n}}",
+            "c": "#include <stdio.h>\\n\\nint findMax(int arr[], int n) {{\\n    // Your code here\\n    return 0;\\n}}"
+        }}
+    }}
+]
+
+Return ONLY valid JSON array. Do NOT include any markdown code blocks, explanations, or text outside the JSON array.
+"""
         else:  # subjective
             prompt = f"""
                 Generate subjective questions on {topic} at {difficulty_level.upper()} level ({level_description}).
@@ -292,6 +626,18 @@ def generate_quiz(topic, difficulty_level, question_type="mcq", num_questions=5)
             except:
                 raise ValueError("Invalid response format from AI")
 
+        # Validate that questions match the requested type
+        if questions:
+            # Ensure all questions have the correct type
+            for q in questions:
+                if 'type' not in q:
+                    q['type'] = question_type
+                elif q.get('type') != question_type:
+                    print(f"WARNING: Question type mismatch. Expected {question_type}, got {q.get('type')}")
+                    q['type'] = question_type  # Force correct type
+            
+            print(f"DEBUG: Validated {len(questions)} questions, all have type: {question_type}")
+
         return questions
 
     except Exception as e:
@@ -299,43 +645,176 @@ def generate_quiz(topic, difficulty_level, question_type="mcq", num_questions=5)
         return None
 
 def process_document(file_path):
-    """Process uploaded document to extract content"""
+    """Process uploaded document to extract content - supports both text-based and image-based PDFs"""
     try:
         # Ensure NLTK data is available
         ensure_nltk_data()
         
         content = ""
         if file_path.lower().endswith('.pdf'):
-            if not HAS_PYPDF2:
-                return "PDF processing not available (PyPDF2 not installed)"
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
-                    content += page.extract_text()
+            # Try text extraction first (faster for text-based PDFs)
+            text_content = ""
+            if HAS_PYPDF2:
+                try:
+                    with open(file_path, 'rb') as file:
+                        pdf_reader = PyPDF2.PdfReader(file)
+                        for page in pdf_reader.pages:
+                            text_content += page.extract_text() + "\n"
+                except Exception as e:
+                    print(f"PyPDF2 extraction failed: {e}")
+            
+            # If text extraction failed or returned empty, try OCR for image-based PDFs
+            if not text_content or not text_content.strip():
+                # Try EasyOCR first (works better for web deployment, no system binaries needed)
+                if HAS_EASYOCR:
+                    try:
+                        print("Attempting OCR extraction using EasyOCR...")
+                        reader = get_easyocr_reader()
+                        images = []
+                        
+                        # Try to convert PDF pages to images
+                        if HAS_PDF2IMAGE:
+                            try:
+                                images = convert_from_path(file_path, dpi=200, first_page=1, last_page=3)
+                                print(f"Converted {len(images)} PDF pages to images using pdf2image")
+                            except Exception as pdf_err:
+                                print(f"pdf2image failed (may need Poppler): {pdf_err}")
+                                # Try alternative: use pdf2image with BytesIO
+                                try:
+                                    from pdf2image import convert_from_bytes
+                                    with open(file_path, 'rb') as f:
+                                        pdf_bytes = f.read()
+                                    images = convert_from_bytes(pdf_bytes, dpi=200, first_page=1, last_page=3)
+                                    print(f"Converted {len(images)} PDF pages using convert_from_bytes")
+                                except Exception as bytes_err:
+                                    print(f"convert_from_bytes also failed: {bytes_err}")
+                        
+                        # If still no images, try PyMuPDF (fitz) as alternative
+                        if not images:
+                            try:
+                                import fitz  # PyMuPDF
+                                pdf_document = fitz.open(file_path)
+                                for page_num in range(min(3, len(pdf_document))):
+                                    page = pdf_document[page_num]
+                                    # Convert page to image
+                                    mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better quality
+                                    pix = page.get_pixmap(matrix=mat)
+                                    img_data = pix.tobytes("png")
+                                    from PIL import Image
+                                    import io
+                                    image = Image.open(io.BytesIO(img_data))
+                                    images.append(image)
+                                pdf_document.close()
+                                print(f"Converted {len(images)} PDF pages using PyMuPDF")
+                            except ImportError:
+                                print("PyMuPDF not available. Install with: pip install PyMuPDF")
+                            except Exception as fitz_err:
+                                print(f"PyMuPDF conversion failed: {fitz_err}")
+                        
+                        # Process images with EasyOCR
+                        if images:
+                            import numpy as np
+                            for i, image in enumerate(images):
+                                print(f"Processing page {i+1}/{len(images)} with EasyOCR...")
+                                try:
+                                    # Convert PIL Image to numpy array for EasyOCR
+                                    if isinstance(image, Image.Image):
+                                        image_array = np.array(image)
+                                    else:
+                                        image_array = image
+                                    
+                                    # EasyOCR returns list of (bbox, text, confidence)
+                                    results = reader.readtext(image_array)
+                                    page_text = " ".join([result[1] for result in results])
+                                    text_content += page_text + "\n"
+                                    print(f"Extracted {len(page_text)} characters from page {i+1}")
+                                except Exception as ocr_err:
+                                    print(f"EasyOCR failed on page {i+1}: {ocr_err}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    continue
+                            
+                            print(f"EasyOCR extraction completed. Extracted {len(text_content)} characters.")
+                        else:
+                            print("Could not convert PDF to images. EasyOCR requires images.")
+                    except Exception as e:
+                        print(f"EasyOCR extraction failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Fall through to try Tesseract if available
+                
+                # Fallback to Tesseract if EasyOCR failed or not available
+                if (not text_content or not text_content.strip()) and HAS_PDF2IMAGE and HAS_TESSERACT:
+                    try:
+                        print("Attempting OCR extraction using Tesseract...")
+                        # Convert PDF pages to images
+                        images = convert_from_path(file_path, dpi=200, first_page=1, last_page=3)
+                        
+                        # Extract text from each image using OCR
+                        for i, image in enumerate(images):
+                            print(f"Processing page {i+1}/{len(images)} with Tesseract...")
+                            try:
+                                page_text = pytesseract.image_to_string(image, lang='eng')
+                                text_content += page_text + "\n"
+                            except Exception as ocr_err:
+                                print(f"Tesseract failed on page {i+1}: {ocr_err}")
+                                continue
+                        
+                        print(f"Tesseract extraction completed. Extracted {len(text_content)} characters.")
+                    except FileNotFoundError as e:
+                        error_msg = "Poppler not found. Please install Poppler or use EasyOCR. See PDF_INSTALLATION.md for details."
+                        print(f"OCR extraction failed: {error_msg}")
+                        if not HAS_PYPDF2 and not HAS_EASYOCR:
+                            return error_msg
+                    except Exception as e:
+                        error_msg = f"Tesseract OCR failed: {str(e)}. Try installing EasyOCR (pip install easyocr) for better compatibility."
+                        print(error_msg)
+                        if not HAS_PYPDF2 and not HAS_EASYOCR:
+                            return error_msg
+                
+                # If still no content extracted
+                if not text_content or not text_content.strip():
+                    missing = []
+                    if not HAS_PDF2IMAGE:
+                        missing.append("pdf2image")
+                    if not HAS_EASYOCR and not HAS_TESSERACT:
+                        missing.append("easyocr or pytesseract")
+                    if not HAS_PYPDF2:
+                        missing.append("PyPDF2")
+                    
+                    if missing:
+                        return f"PDF processing not available. Please install: {', '.join(missing)}. For web deployment, use: pip install easyocr pdf2image"
+            
+            content = text_content
         else:
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
 
-        if not content.strip():
+        if not content or not content.strip():
             return None
 
         if HAS_NLTK:
             tokens = word_tokenize(content.lower())
             stop_words = set(stopwords.words('english'))
-            meaningful_words = [word for word in tokens if word.isalnum() and word not in stop_words]
+            meaningful_words = [word for word in tokens if word.isalnum() and word not in stop_words and len(word) > 2]
 
             if not meaningful_words:
                 return None
 
             word_freq = Counter(meaningful_words)
-            main_topic = word_freq.most_common(1)[0][0].capitalize()
+            # Get top 3 most common words and combine them
+            top_words = word_freq.most_common(3)
+            main_topic = " ".join([word[0].capitalize() for word in top_words])
             return main_topic
         else:
-            # Fallback: return first 100 characters as topic
-            return content[:100].strip()
+            # Fallback: return first meaningful words as topic
+            words = content.split()[:5]
+            return " ".join(words).strip()[:100]
 
     except Exception as e:
         print(f"Error processing document: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 # Routes
@@ -387,6 +866,9 @@ def health_check():
         "database": db_status,
         "dependencies": {
             "has_pypdf2": HAS_PYPDF2,
+            "has_pdf2image": HAS_PDF2IMAGE,
+            "has_tesseract": HAS_TESSERACT,
+            "has_easyocr": HAS_EASYOCR,
             "has_nltk": HAS_NLTK,
             "has_reportlab": HAS_REPORTLAB
         },
@@ -521,6 +1003,48 @@ def sitemap():
 def robots():
     return send_file('static/robots.txt', mimetype='text/plain')
 
+@app.route('/api/test_code', methods=['POST'])
+@login_required
+def test_code():
+    """API endpoint to test code execution"""
+    try:
+        data = request.get_json()
+        code = data.get('code', '')
+        language = data.get('language', 'python')
+        test_input = data.get('test_input', '')
+        time_limit = int(data.get('time_limit', 2))
+        memory_limit = int(data.get('memory_limit', 256))
+        
+        if not code:
+            return jsonify({'success': False, 'error': 'No code provided'}), 400
+        
+        result = execute_code(code, language, test_input, time_limit, memory_limit)
+        return jsonify({'success': True, 'result': result})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/run_test_cases', methods=['POST'])
+@login_required
+def run_test_cases_api():
+    """API endpoint to run test cases for a coding question"""
+    try:
+        data = request.get_json()
+        code = data.get('code', '')
+        language = data.get('language', 'python')
+        test_cases = data.get('test_cases', [])
+        time_limit = int(data.get('time_limit', 2))
+        memory_limit = int(data.get('memory_limit', 256))
+        
+        if not code or not test_cases:
+            return jsonify({'success': False, 'error': 'Code and test cases required'}), 400
+        
+        result = run_test_cases(code, language, test_cases, time_limit, memory_limit)
+        return jsonify({'success': True, 'result': result})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/google77cd707098d48f23.html')
 def google_verification():
     return send_file('static/google77cd707098d48f23.html', mimetype='text/html')
@@ -616,7 +1140,10 @@ def dashboard():
     my_submissions = []
     if getattr(current_user, 'role', 'student') == 'student':
         my_submissions = db.session.query(QuizSubmission).filter_by(student_id=current_user.id).order_by(QuizSubmission.submitted_at.desc()).all()
-    return render_template('dashboard.html', progress_records=progress_records, my_quizzes=my_quizzes, my_submissions=my_submissions)
+    # Pass current time for checking if review is unlocked
+    from datetime import datetime
+    current_time = datetime.utcnow()
+    return render_template('dashboard.html', progress_records=progress_records, my_quizzes=my_quizzes, my_submissions=my_submissions, current_time=current_time)
 
 def generate_quiz_code(length=6):
     import random, string
@@ -666,6 +1193,16 @@ def teacher_create_quiz():
                     qtype=qtype,
                     marks=int(q.get('marks', 1))
                 )
+                # Handle coding questions
+                if qtype == 'coding':
+                    qq.test_cases_json = json.dumps(q.get('test_cases', []))
+                    qq.language_constraints = json.dumps(q.get('language_constraints', ['python', 'java', 'cpp', 'c']))
+                    qq.time_limit_seconds = q.get('time_limit_seconds', 2)
+                    qq.memory_limit_mb = q.get('memory_limit_mb', 256)
+                    qq.sample_input = q.get('sample_input', '')
+                    qq.sample_output = q.get('sample_output', '')
+                    starter_code = q.get('starter_code', {})
+                    qq.starter_code = json.dumps(starter_code) if starter_code else None
                 db.session.add(qq)
 
             db.session.commit()
@@ -716,10 +1253,13 @@ def teacher_create_quiz_simple():
                     if extracted:
                         topic = f"{topic} - {extracted}"
 
-            questions = generate_quiz(topic, difficulty if difficulty in ['beginner','intermediate','advanced'] else 'beginner', 'mcq', count) or []
+            question_type = request.form.get('question_type', 'mcq').strip()
+            print(f"DEBUG: Generating {question_type} questions for topic: {topic}, count: {count}")
+            questions = generate_quiz(topic, difficulty if difficulty in ['beginner','intermediate','advanced'] else 'beginner', question_type, count) or []
             if not questions:
                 flash('Failed to generate questions. Try again.', 'error')
                 return redirect(url_for('teacher_create_quiz_simple'))
+            print(f"DEBUG: Generated {len(questions)} questions, first question type: {questions[0].get('type', 'unknown') if questions else 'none'}")
 
             if not title:
                 title = f"{topic} Quiz"
@@ -734,6 +1274,7 @@ def teacher_create_quiz_simple():
                 'topic': topic,
                 'difficulty': difficulty,
                 'duration_minutes': duration_minutes,
+                'question_type': question_type,
                 'questions': questions
             }
             return render_template('preview_quiz.html', data=session['preview_quiz'])
@@ -766,10 +1307,13 @@ def teacher_quiz_preview():
             flash('Provide topic and number of questions.', 'error')
             return redirect(url_for('teacher_create_quiz_simple'))
 
-        questions = generate_quiz(topic, difficulty if difficulty in ['beginner','intermediate','advanced'] else 'beginner', 'mcq', count) or []
+        question_type = request.form.get('question_type', 'mcq').strip()
+        print(f"DEBUG: Preview - Generating {question_type} questions for topic: {topic}, count: {count}")
+        questions = generate_quiz(topic, difficulty if difficulty in ['beginner','intermediate','advanced'] else 'beginner', question_type, count) or []
         if not questions:
             flash('Failed to generate questions.', 'error')
             return redirect(url_for('teacher_create_quiz_simple'))
+        print(f"DEBUG: Preview - Generated {len(questions)} questions, first question type: {questions[0].get('type', 'unknown') if questions else 'none'}")
 
         # Default marks fill
         for q in questions:
@@ -781,6 +1325,7 @@ def teacher_quiz_preview():
             'topic': topic,
             'difficulty': difficulty,
             'duration_minutes': duration_minutes,
+            'question_type': question_type,
             'questions': questions
         }
         return render_template('preview_quiz.html', data=session['preview_quiz'])
@@ -819,15 +1364,41 @@ def teacher_quiz_finalize():
         db.session.flush()
 
         for q in q_overrides:
-            opts = q.get('options', [])
+            qtype = q.get('type', 'mcq')
+            opts = q.get('options', []) if qtype == 'mcq' else []
             qq = QuizQuestion(
                 quiz_id=quiz.id,
                 question=q.get('question', ''),
                 options_json=json.dumps(opts) if opts else None,
                 answer=q.get('answer', ''),
-                qtype='mcq',
+                qtype=qtype,
                 marks=int(q.get('marks', 1))
             )
+            # Handle coding questions
+            if qtype == 'coding':
+                try:
+                    test_cases = q.get('test_cases', [])
+                    qq.test_cases_json = json.dumps(test_cases) if test_cases else None
+                    
+                    language_constraints = q.get('language_constraints', ['python', 'java', 'cpp', 'c'])
+                    qq.language_constraints = json.dumps(language_constraints) if language_constraints else json.dumps(['python', 'java', 'cpp', 'c'])
+                    
+                    qq.time_limit_seconds = q.get('time_limit_seconds', 2) or 2
+                    qq.memory_limit_mb = q.get('memory_limit_mb', 256) or 256
+                    qq.sample_input = q.get('sample_input', '') or ''
+                    qq.sample_output = q.get('sample_output', '') or ''
+                    
+                    starter_code = q.get('starter_code', {})
+                    if starter_code and isinstance(starter_code, dict):
+                        qq.starter_code = json.dumps(starter_code)
+                    elif starter_code:
+                        qq.starter_code = json.dumps(starter_code)
+                    else:
+                        qq.starter_code = None
+                except Exception as coding_error:
+                    print(f"Error processing coding question fields: {coding_error}")
+                    print(f"Question data: {q}")
+                    raise
             db.session.add(qq)
 
         db.session.commit()
@@ -836,8 +1407,11 @@ def teacher_quiz_finalize():
         return redirect(url_for('dashboard'))
     except Exception as e:
         db.session.rollback()
+        import traceback
+        error_details = traceback.format_exc()
         print(f"Finalize error: {e}")
-        flash('Error finalizing quiz.', 'error')
+        print(f"Full traceback:\n{error_details}")
+        flash(f'Error finalizing quiz: {str(e)}', 'error')
         return redirect(url_for('teacher_create_quiz_simple'))
 
 # Student: join quiz by code
@@ -850,6 +1424,18 @@ def join_quiz():
         if not quiz:
             flash('Invalid quiz code', 'error')
             return redirect(url_for('join_quiz'))
+        
+        # Check if student has already completed this quiz
+        existing_completed = db.session.query(QuizSubmission).filter_by(
+            quiz_id=quiz.id, 
+            student_id=current_user.id, 
+            completed=True
+        ).first()
+        
+        if existing_completed:
+            flash('You have already attempted this quiz. You can only take it once.', 'error')
+            return redirect(url_for('dashboard'))
+        
         return redirect(url_for('take_shared_quiz', code=code))
     return render_template('join_quiz.html')
 
@@ -861,6 +1447,18 @@ def take_shared_quiz(code):
     if not quiz:
         flash('Quiz not found', 'error')
         return redirect(url_for('join_quiz'))
+    
+    # Check if student has already completed this quiz
+    existing_completed = db.session.query(QuizSubmission).filter_by(
+        quiz_id=quiz.id, 
+        student_id=current_user.id, 
+        completed=True
+    ).first()
+    
+    if existing_completed:
+        flash('You have already attempted this quiz. You can only take it once.', 'error')
+        return redirect(url_for('dashboard'))
+    
     q_rows = db.session.query(QuizQuestion).filter_by(quiz_id=quiz.id).all()
     # Parse options JSON server-side to avoid template errors
     parsed_questions = []
@@ -869,13 +1467,31 @@ def take_shared_quiz(code):
             options = json.loads(q.options_json) if q.options_json else []
         except Exception:
             options = []
-        parsed_questions.append({
+        
+        question_data = {
             'id': q.id,
             'question': q.question,
             'qtype': q.qtype,
             'marks': q.marks,
             'options': options,
-        })
+        }
+        
+        # Add coding question data
+        if q.qtype == 'coding':
+            try:
+                question_data['test_cases'] = json.loads(q.test_cases_json) if q.test_cases_json else []
+                question_data['language_constraints'] = json.loads(q.language_constraints) if q.language_constraints else ['python', 'java', 'cpp', 'c']
+                question_data['time_limit_seconds'] = q.time_limit_seconds or 2
+                question_data['memory_limit_mb'] = q.memory_limit_mb or 256
+                question_data['sample_input'] = q.sample_input or ''
+                question_data['sample_output'] = q.sample_output or ''
+                question_data['starter_code'] = json.loads(q.starter_code) if q.starter_code else {}
+            except Exception as e:
+                print(f"Error parsing coding question data: {e}")
+                question_data['test_cases'] = []
+                question_data['language_constraints'] = ['python', 'java', 'cpp', 'c']
+        
+        parsed_questions.append(question_data)
     # Ensure a started submission exists (one per student/quiz if not completed)
     existing = db.session.query(QuizSubmission).filter_by(quiz_id=quiz.id, student_id=current_user.id, completed=False).first()
     if not existing:
@@ -892,6 +1508,17 @@ def submit_shared_quiz(code):
     if not quiz:
         flash('Quiz not found', 'error')
         return redirect(url_for('join_quiz'))
+    
+    # Check if student has already completed this quiz
+    existing_completed = db.session.query(QuizSubmission).filter_by(
+        quiz_id=quiz.id, 
+        student_id=current_user.id, 
+        completed=True
+    ).first()
+    
+    if existing_completed:
+        flash('You have already attempted this quiz. You can only take it once.', 'error')
+        return redirect(url_for('dashboard'))
     questions = db.session.query(QuizQuestion).filter_by(quiz_id=quiz.id).all()
 
     total_marks = 0.0
@@ -911,10 +1538,46 @@ def submit_shared_quiz(code):
         is_correct = None
         ai_score = None
         gained = 0.0
+        code_language = None
+        test_results_json = None
+        passed_test_cases = 0
+        total_test_cases = 0
 
         if q.qtype == 'mcq':
             is_correct = (user_ans.split('. ')[0] == (q.answer or '')) if user_ans else False
             gained = float(q.marks or 1) if is_correct else 0.0
+        elif q.qtype == 'coding':
+            # Handle coding question submission
+            code_data = request.form.get(f'code_{q.id}', '').strip()
+            language = request.form.get(f'language_{q.id}', 'python')
+            
+            if code_data:
+                try:
+                    # Parse test cases
+                    test_cases = json.loads(q.test_cases_json) if q.test_cases_json else []
+                    time_limit = q.time_limit_seconds or 2
+                    memory_limit = q.memory_limit_mb or 256
+                    
+                    # Run test cases
+                    test_results = run_test_cases(code_data, language, test_cases, time_limit, memory_limit)
+                    
+                    # Calculate score based on passed test cases
+                    passed_test_cases = test_results['passed']
+                    total_test_cases = test_results['total']
+                    percentage_passed = test_results['percentage'] / 100.0
+                    
+                    gained = float(q.marks or 1) * percentage_passed
+                    is_correct = percentage_passed == 1.0  # Perfect score
+                    code_language = language
+                    test_results_json = json.dumps(test_results['results'])
+                    user_ans = code_data  # Store code as answer
+                except Exception as e:
+                    print(f"Error evaluating coding question: {e}")
+                    gained = 0.0
+                    is_correct = False
+                    code_language = language
+                    test_results_json = json.dumps([])
+                    user_ans = code_data
         else:
             # subjective via AI
             if user_ans:
@@ -932,7 +1595,11 @@ def submit_shared_quiz(code):
             user_answer=user_ans,
             is_correct=is_correct,
             ai_score=ai_score,
-            scored_marks=gained
+            scored_marks=gained,
+            code_language=code_language,
+            test_results_json=test_results_json,
+            passed_test_cases=passed_test_cases,
+            total_test_cases=total_test_cases
         )
         db.session.add(ans)
         if user_ans:
@@ -1031,6 +1698,91 @@ def auto_submit_partial(code):
         db.session.rollback()
         return ('', 204)
 
+# Student: view quiz result (after 15 minutes)
+@app.route('/quiz/result/<int:submission_id>')
+@login_required
+def view_quiz_result(submission_id):
+    submission = db.session.query(QuizSubmission).filter_by(id=submission_id, student_id=current_user.id).first()
+    if not submission:
+        flash('Submission not found', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Check if review is unlocked (15 minutes have passed)
+    from datetime import datetime
+    current_time = datetime.utcnow()
+    if submission.review_unlocked_at and submission.review_unlocked_at > current_time:
+        flash('Results will be available 15 minutes after submission', 'info')
+        return redirect(url_for('dashboard'))
+    
+    # Get quiz and questions
+    quiz = db.session.query(Quiz).filter_by(id=submission.quiz_id).first()
+    if not quiz:
+        flash('Quiz not found', 'error')
+        return redirect(url_for('dashboard'))
+    
+    questions = db.session.query(QuizQuestion).filter_by(quiz_id=quiz.id).order_by(QuizQuestion.id).all()
+    answers = db.session.query(QuizAnswer).filter_by(submission_id=submission.id).all()
+    
+    # Create answer map
+    answer_map = {ans.question_id: ans for ans in answers}
+    
+    # Format results for template
+    results = []
+    for q in questions:
+        ans = answer_map.get(q.id)
+        if q.qtype == 'mcq':
+            # Parse options
+            options = json.loads(q.options_json) if q.options_json else []
+            user_answer = ans.user_answer if ans else ''
+            correct_option = next((opt for opt in options if opt.startswith(f"{q.answer}.")), '') if q.answer else ''
+            
+            results.append({
+                'question': q.question,
+                'user_answer': user_answer,
+                'correct_answer': correct_option,
+                'is_correct': ans.is_correct if ans else False,
+                'type': 'mcq',
+                'marks': q.marks
+            })
+        elif q.qtype == 'subjective':
+            results.append({
+                'question': q.question,
+                'user_answer': ans.user_answer if ans else '',
+                'sample_answer': q.answer or 'N/A',
+                'ai_score': ans.ai_score if ans else 0.0,
+                'scored_marks': ans.scored_marks if ans else 0.0,
+                'marks': q.marks,
+                'type': 'subjective'
+            })
+        elif q.qtype == 'coding':
+            # Parse test results
+            test_results = json.loads(ans.test_results_json) if ans and ans.test_results_json else []
+            results.append({
+                'question': q.question,
+                'user_answer': ans.user_answer if ans else '',
+                'code_language': ans.code_language if ans else '',
+                'passed_test_cases': ans.passed_test_cases if ans else 0,
+                'total_test_cases': ans.total_test_cases if ans else 0,
+                'test_results': test_results,
+                'scored_marks': ans.scored_marks if ans else 0.0,
+                'marks': q.marks,
+                'type': 'coding',
+                'sample_input': q.sample_input,
+                'sample_output': q.sample_output
+            })
+    
+    final_score = f"{submission.score:.1f}/{submission.total:.1f}"
+    percentage = submission.percentage
+    passed = submission.passed
+    
+    return render_template('shared_quiz_results.html', 
+                         quiz=quiz,
+                         submission=submission,
+                         results=results,
+                         final_score=final_score,
+                         percentage=percentage,
+                         passed=passed)
+
 # Teacher: view results
 @app.route('/teacher/quiz/<code>/results')
 @login_required
@@ -1046,6 +1798,54 @@ def teacher_quiz_results(code):
     # Join with users
     student_map = {u.id: u for u in db.session.query(User).filter(User.id.in_([s.student_id for s in submissions])).all()}
     return render_template('teacher_results.html', quiz=quiz, submissions=submissions, student_map=student_map)
+
+# Teacher: allow student to retake quiz
+@app.route('/teacher/quiz/<code>/allow-retake/<int:submission_id>', methods=['POST'])
+@login_required
+def allow_student_retake(code, submission_id):
+    guard = require_teacher()
+    if guard:
+        return guard
+    
+    # Verify quiz ownership
+    quiz = db.session.query(Quiz).filter_by(code=code.upper(), created_by=current_user.id).first()
+    if not quiz:
+        flash('Quiz not found or you do not have permission', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Get the submission and verify it belongs to this quiz
+    submission = db.session.query(QuizSubmission).filter_by(
+        id=submission_id,
+        quiz_id=quiz.id
+    ).first()
+    
+    if not submission:
+        flash('Submission not found', 'error')
+        return redirect(url_for('teacher_quiz_results', code=code))
+    
+    # Reset the submission to allow retake
+    # Delete old answers so student starts fresh
+    db.session.query(QuizAnswer).filter_by(submission_id=submission.id).delete()
+    
+    # Reset submission status
+    submission.completed = False
+    submission.score = 0.0
+    submission.total = 0.0
+    submission.percentage = 0.0
+    submission.passed = False
+    submission.review_unlocked_at = None
+    submission.answered_count = 0
+    submission.fullscreen_exit_flag = False
+    submission.is_full_completion = False
+    
+    db.session.commit()
+    
+    # Get student username for message
+    student = db.session.query(User).filter_by(id=submission.student_id).first()
+    student_name = student.username if student else f"Student ID {submission.student_id}"
+    
+    flash(f'Successfully allowed {student_name} to retake the quiz. Their previous submission has been reset.', 'success')
+    return redirect(url_for('teacher_quiz_results', code=code))
 
 # Temporary helper: run lightweight migration for SQLite (adds missing columns/tables)
 @app.route('/dev/migrate')
@@ -1102,6 +1902,42 @@ def dev_migrate():
                     conn.execute(text("ALTER TABLE quiz_submission ADD COLUMN completed BOOLEAN DEFAULT 0;"))
             except Exception as e:
                 print(f"ALTER TABLE quiz_submission add columns failed (may exist): {e}")
+
+            # Add coding question columns to quiz_question if missing
+            try:
+                res = conn.execute(text("PRAGMA table_info(quiz_question);"))
+                cols = [str(r[1]) for r in res]
+                if 'test_cases_json' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_question ADD COLUMN test_cases_json TEXT;"))
+                if 'language_constraints' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_question ADD COLUMN language_constraints TEXT;"))
+                if 'time_limit_seconds' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_question ADD COLUMN time_limit_seconds INTEGER;"))
+                if 'memory_limit_mb' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_question ADD COLUMN memory_limit_mb INTEGER;"))
+                if 'sample_input' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_question ADD COLUMN sample_input TEXT;"))
+                if 'sample_output' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_question ADD COLUMN sample_output TEXT;"))
+                if 'starter_code' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_question ADD COLUMN starter_code TEXT;"))
+            except Exception as e:
+                print(f"ALTER TABLE quiz_question add coding columns failed (may exist): {e}")
+
+            # Add coding answer columns to quiz_answer if missing
+            try:
+                res = conn.execute(text("PRAGMA table_info(quiz_answer);"))
+                cols = [str(r[1]) for r in res]
+                if 'code_language' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_answer ADD COLUMN code_language VARCHAR(20);"))
+                if 'test_results_json' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_answer ADD COLUMN test_results_json TEXT;"))
+                if 'passed_test_cases' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_answer ADD COLUMN passed_test_cases INTEGER DEFAULT 0;"))
+                if 'total_test_cases' not in cols:
+                    conn.execute(text("ALTER TABLE quiz_answer ADD COLUMN total_test_cases INTEGER DEFAULT 0;"))
+            except Exception as e:
+                print(f"ALTER TABLE quiz_answer add coding columns failed (may exist): {e}")
 
         # Create any new tables
         db.create_all()
