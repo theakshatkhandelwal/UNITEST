@@ -696,7 +696,8 @@ def process_document(file_path):
                                     print(f"convert_from_bytes also failed: {bytes_err}")
                         
                         # If still no images, try PyMuPDF (fitz) as alternative
-                        if not images:
+                        # Note: PyMuPDF excluded from Vercel due to size, only works locally
+                        if not images and not os.environ.get('VERCEL'):
                             try:
                                 import fitz  # PyMuPDF
                                 pdf_document = fitz.open(file_path)
@@ -2478,11 +2479,21 @@ def download_quiz_results_csv(code):
             'Submitted At': s.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
         })
     
-    # Create DataFrame and CSV
-    df = pd.DataFrame(data)
-    csv_buffer = io.StringIO()
-    df.to_csv(csv_buffer, index=False)
-    csv_data = csv_buffer.getvalue()
+    # Create CSV (use pandas if available, otherwise use csv module)
+    if HAS_PANDAS:
+        df = pd.DataFrame(data)
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_data = csv_buffer.getvalue()
+    else:
+        # Manual CSV generation (lightweight, no pandas needed)
+        import csv
+        csv_buffer = io.StringIO()
+        if data:
+            writer = csv.DictWriter(csv_buffer, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+        csv_data = csv_buffer.getvalue()
     
     # Create BytesIO for send_file
     output = io.BytesIO()
