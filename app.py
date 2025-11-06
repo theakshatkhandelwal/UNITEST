@@ -836,6 +836,8 @@ def home():
 def debug_info():
     """Debug endpoint for Vercel troubleshooting"""
     try:
+        # Check if we're on Vercel
+        is_vercel = bool(os.environ.get('VERCEL'))
         return {
             'status': 'ok',
             'environment': {
