@@ -11,90 +11,20 @@ import requests
 import time
 import csv
 import io
-# Conditional imports for optional dependencies
-try:
-    import pandas as pd
-    HAS_PANDAS = True
-except ImportError:
-    HAS_PANDAS = False
-    pd = None
-try:
-    import PyPDF2
-    HAS_PYPDF2 = True
-except ImportError:
-    HAS_PYPDF2 = False
+# Conditional imports for optional dependencies - REMOVED FOR VERCEL
+# All optional dependencies removed to prevent import crashes
+HAS_PANDAS = False
+pd = None
+HAS_PYPDF2 = False
+HAS_PDF2IMAGE = False
+HAS_TESSERACT = False
+HAS_EASYOCR = False
+_easyocr_reader = None
+HAS_NLTK = False
+HAS_REPORTLAB = False
 
-try:
-    from pdf2image import convert_from_path
-    HAS_PDF2IMAGE = True
-except ImportError:
-    HAS_PDF2IMAGE = False
-
-try:
-    import pytesseract
-    from PIL import Image
-    HAS_TESSERACT = True
-    # Try to configure Tesseract path if not in PATH (common on Windows)
-    # Don't test tesseract during import - it might fail on Vercel
-    try:
-        # Common installation paths - only set if file exists
-        possible_paths = [
-            r'C:\Program Files\Tesseract-OCR\tesseract.exe',
-            r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
-            '/usr/local/bin/tesseract',
-            '/usr/bin/tesseract',
-        ]
-        for path in possible_paths:
-            if os.path.exists(path):
-                pytesseract.pytesseract.tesseract_cmd = path
-                break
-    except Exception:
-        # Ignore tesseract configuration errors during import
-        pass
-except ImportError:
-    HAS_TESSERACT = False
-
-# EasyOCR - works without system binaries, better for web deployment
-# Lazy initialization to avoid slow import on Vercel
-try:
-    import easyocr
-    HAS_EASYOCR = True
-    # Initialize EasyOCR reader (English only, can add more languages)
-    # Cache it to avoid reinitializing - LAZY INITIALIZATION
-    _easyocr_reader = None
-    def get_easyocr_reader():
-        global _easyocr_reader
-        if _easyocr_reader is None:
-            try:
-                print("Initializing EasyOCR reader...", file=sys.stderr)
-                _easyocr_reader = easyocr.Reader(['en'], gpu=False)  # Use GPU if available
-            except Exception as e:
-                print(f"EasyOCR initialization failed: {e}", file=sys.stderr)
-                return None
-        return _easyocr_reader
-except ImportError:
-    HAS_EASYOCR = False
-    _easyocr_reader = None
-    def get_easyocr_reader():
-        return None
-
-try:
-    import nltk
-    from nltk.tokenize import word_tokenize
-    from nltk.corpus import stopwords
-    HAS_NLTK = True
-except ImportError:
-    HAS_NLTK = False
-
-try:
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    HAS_REPORTLAB = True
-except ImportError:
-    HAS_REPORTLAB = False
+def get_easyocr_reader():
+    return None
 
 from collections import Counter
 from datetime import datetime
@@ -2425,17 +2355,8 @@ def ai_learn():
 @app.route('/download_pdf')
 @login_required
 def download_pdf():
-    quiz_data = session.get('current_quiz')
-    if not quiz_data:
-        return jsonify({'error': 'No quiz available'})
-
-    questions = quiz_data['questions']
-    topic = quiz_data['topic']
-    bloom_level = quiz_data['bloom_level']
-
-    # Create PDF in memory
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    # PDF download disabled for Vercel - requires reportlab
+    return jsonify({'error': 'PDF download not available on Vercel'}), 503
     
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
