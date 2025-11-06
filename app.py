@@ -108,7 +108,11 @@ def ensure_nltk_data():
             pass
 
 # Configure Flask for Vercel (no instance folder)
-app = Flask(__name__, instance_relative_config=False)
+# Explicitly set paths to ensure templates/static are found on Vercel
+app = Flask(__name__, 
+            instance_relative_config=False,
+            static_folder='static',
+            template_folder='templates')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 
 # Database configuration - use PostgreSQL on Vercel/NeonDB, SQLite locally
