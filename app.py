@@ -154,10 +154,30 @@ else:
         'pool_size': 5
     }
 
-db = SQLAlchemy(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+# Initialize database with error handling to prevent crashes
+try:
+    db = SQLAlchemy(app)
+except Exception as e:
+    print(f"Error creating SQLAlchemy instance: {e}", file=sys.stderr)
+    import traceback
+    traceback.print_exc(file=sys.stderr)
+    # Create minimal db to prevent crash
+    db = SQLAlchemy()
+    db.init_app(app)
+
+# Initialize login manager with error handling
+try:
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+except Exception as e:
+    print(f"Error initializing login manager: {e}", file=sys.stderr)
+    import traceback
+    traceback.print_exc(file=sys.stderr)
+    # Create minimal login manager
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
 
 # Configure Google AI (with error handling)
 try:
