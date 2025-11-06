@@ -912,34 +912,6 @@ def debug_info():
 
 @app.route('/health')
 def health_check():
-    """Simple health check endpoint for debugging"""
-    try:
-        # Test database connection
-        db.session.execute('SELECT 1')
-        db_status = "OK"
-    except Exception as e:
-        db_status = f"Error: {str(e)}"
-    
-    return jsonify({
-        "status": "OK",
-        "database": db_status,
-        "dependencies": {
-            "has_pypdf2": HAS_PYPDF2,
-            "has_pdf2image": HAS_PDF2IMAGE,
-            "has_tesseract": HAS_TESSERACT,
-            "has_easyocr": HAS_EASYOCR,
-            "has_nltk": HAS_NLTK,
-            "has_reportlab": HAS_REPORTLAB
-        },
-        "environment": {
-            "has_secret_key": bool(os.environ.get('SECRET_KEY')),
-            "has_google_api": bool(os.environ.get('GOOGLE_AI_API_KEY')),
-            "has_database_url": bool(os.environ.get('DATABASE_URL'))
-        }
-    })
-
-@app.route('/health')
-def health_check():
     """Health check endpoint - doesn't require database"""
     try:
         return jsonify({
