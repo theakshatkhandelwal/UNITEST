@@ -42,7 +42,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Configure Google AI
-genai.configure(api_key=os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyDUPxvPmawZHRJf2KD6GAGvhY8uVkTh-u4'))
+genai.configure(api_key=os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyBKYJLje8mR0VP5XxmrpG3PfXAleNXU_-c'))
 
 # Database Models (simplified for Vercel)
 class User(UserMixin, db.Model):

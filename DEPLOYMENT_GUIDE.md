@@ -119,7 +119,7 @@ Set these in your platform's environment variables section:
 | Variable | Description | Required | Example |
 |----------|-------------|----------|---------|
 | `SECRET_KEY` | Flask secret key | Yes | `your-secret-key-here` |
-| `GOOGLE_AI_API_KEY` | Google AI API key | Yes | `AIzaSyDUPxvPmawZHRJf2KD6GAGvhY8uVkTh-u4` |
+| `GOOGLE_AI_API_KEY` | Google AI API key | Yes | `AIzaSyBKYJLje8mR0VP5XxmrpG3PfXAleNXU_-c` |
 | `DATABASE_URL` | PostgreSQL connection | Yes | `postgresql://...` |
 | `FLASK_ENV` | Environment | No | `production` |
 | `PORT` | Server port | No | `8080` |

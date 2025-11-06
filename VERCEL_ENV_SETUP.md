@@ -15,7 +15,7 @@ Add these three environment variables in your Vercel project:
 | Variable Name | Value |
 |--------------|-------|
 | **SECRET_KEY** | `your-random-secret-key` (or generate a new one) |
-| **GOOGLE_AI_API_KEY** | `UPxvPmawZHRJf2KD6GAGvhY8uVkTh-u4` |
+| **GOOGLE_AI_API_KEY** | `AIzaSyBKYJLje8mR0VP5XxmrpG3PfXAleNXU_-c` |
 | **DATABASE_URL** | `postgresql://neondb_owner:npg_dyFJ5zZ0fWPj@ep-green-glade-a4x5w9dj-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require` |
 
 ## Steps to Set in Vercel
