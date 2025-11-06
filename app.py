@@ -7,10 +7,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import google.generativeai as genai
 import json
 import re
-import pandas as pd
 import requests
 import time
+import csv
+import io
 # Conditional imports for optional dependencies
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PANDAS = False
+    pd = None
 try:
     import PyPDF2
     HAS_PYPDF2 = True
@@ -83,7 +90,6 @@ except ImportError:
     HAS_REPORTLAB = False
 
 from collections import Counter
-import io
 from datetime import datetime
 
 # Download NLTK data only when needed
@@ -2459,11 +2465,20 @@ def download_quiz_results_csv(code):
             'Submitted At': s.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
         })
     
-    # Create DataFrame and CSV
-    df = pd.DataFrame(data)
-    csv_buffer = io.StringIO()
-    df.to_csv(csv_buffer, index=False)
-    csv_data = csv_buffer.getvalue()
+    # Create CSV (use pandas if available, otherwise use csv module)
+    if HAS_PANDAS:
+        df = pd.DataFrame(data)
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_data = csv_buffer.getvalue()
+    else:
+        # Use built-in csv module
+        csv_buffer = io.StringIO()
+        if data:
+            writer = csv.DictWriter(csv_buffer, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+        csv_data = csv_buffer.getvalue()
     
     # Create BytesIO for send_file
     output = io.BytesIO()
@@ -2508,7 +2523,11 @@ def download_quiz_results_xlsx(code):
             'Submitted At': s.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
         })
     
-    # Create DataFrame and XLSX
+    # Create XLSX (requires pandas and openpyxl)
+    if not HAS_PANDAS:
+        flash('XLSX export requires pandas. Please use CSV export instead.', 'error')
+        return redirect(url_for('teacher_quiz_results', code=code))
+    
     df = pd.DataFrame(data)
     xlsx_buffer = io.BytesIO()
     with pd.ExcelWriter(xlsx_buffer, engine='openpyxl') as writer:
