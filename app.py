@@ -2355,58 +2355,6 @@ def ai_learn():
 def download_pdf():
     # PDF download disabled for Vercel - requires reportlab
     return jsonify({'error': 'PDF download not available on Vercel'}), 503
-    
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        spaceAfter=30
-    )
-    question_style = ParagraphStyle(
-        'Question',
-        parent=styles['Normal'],
-        fontSize=12,
-        spaceAfter=12,
-        textColor=colors.black
-    )
-    option_style = ParagraphStyle(
-        'Option',
-        parent=styles['Normal'],
-        fontSize=11,
-        leftIndent=20,
-        spaceAfter=6,
-        textColor=colors.black
-    )
-    
-    content = []
-    content.append(Paragraph(f"Quiz: {topic}", title_style))
-    content.append(Paragraph(f"Bloom's Taxonomy Level: {bloom_level}", styles['Heading2']))
-    content.append(Spacer(1, 20))
-    
-    for i, q in enumerate(questions, 1):
-        question_text = f"Q{i}. {q['question']}"
-        content.append(Paragraph(question_text, question_style))
-        
-        if q.get('type') == 'mcq':
-            for opt in q['options']:
-                option_text = f"□ {opt}"
-                content.append(Paragraph(option_text, option_style))
-        else:
-            content.append(Paragraph(f"Marks: {q.get('marks', 10)}", option_style))
-            content.append(Paragraph("Answer: ________________________", option_style))
-        
-        content.append(Spacer(1, 20))
-    
-    doc.build(content)
-    buffer.seek(0)
-    
-    return send_file(
-        buffer,
-        as_attachment=True,
-        download_name=f"Quiz_{topic}_Level{bloom_level}.pdf",
-        mimetype='application/pdf'
-    )
 
 # Download quiz results as CSV
 @app.route('/teacher/quiz/<code>/results/download/csv')
