@@ -55,21 +55,28 @@ except ImportError:
     HAS_TESSERACT = False
 
 # EasyOCR - works without system binaries, better for web deployment
+# Lazy initialization to avoid slow import on Vercel
 try:
     import easyocr
     HAS_EASYOCR = True
     # Initialize EasyOCR reader (English only, can add more languages)
-    # Cache it to avoid reinitializing
+    # Cache it to avoid reinitializing - LAZY INITIALIZATION
     _easyocr_reader = None
     def get_easyocr_reader():
         global _easyocr_reader
         if _easyocr_reader is None:
-            print("Initializing EasyOCR reader...")
-            _easyocr_reader = easyocr.Reader(['en'], gpu=False)  # Use GPU if available
+            try:
+                print("Initializing EasyOCR reader...", file=sys.stderr)
+                _easyocr_reader = easyocr.Reader(['en'], gpu=False)  # Use GPU if available
+            except Exception as e:
+                print(f"EasyOCR initialization failed: {e}", file=sys.stderr)
+                return None
         return _easyocr_reader
 except ImportError:
     HAS_EASYOCR = False
     _easyocr_reader = None
+    def get_easyocr_reader():
+        return None
 
 try:
     import nltk
@@ -179,13 +186,25 @@ except Exception as e:
     login_manager.init_app(app)
     login_manager.login_view = 'login'
 
-# Configure Google AI (with error handling)
-try:
-    google_api_key = os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyBKYJLje8mR0VP5XxmrpG3PfXAleNXU_-c')
-    genai.configure(api_key=google_api_key)
-except Exception as e:
-    print(f"Warning: Google AI configuration failed: {e}", file=sys.stderr)
-    # Continue without AI features if key is invalid
+# Configure Google AI (with error handling) - DEFER to avoid import-time issues
+_google_ai_configured = False
+def configure_google_ai():
+    global _google_ai_configured
+    if _google_ai_configured:
+        return
+    try:
+        google_api_key = os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyBKYJLje8mR0VP5XxmrpG3PfXAleNXU_-c')
+        genai.configure(api_key=google_api_key)
+        _google_ai_configured = True
+        print("Google AI configured successfully", file=sys.stderr)
+    except Exception as e:
+        print(f"Warning: Google AI configuration failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        # Continue without AI features if key is invalid
+
+# Configure immediately but with error handling
+configure_google_ai()
 
 # Database Models
 class User(UserMixin, db.Model):
@@ -274,6 +293,7 @@ def evaluate_subjective_answer(question, student_answer, model_answer):
         return 0.0
 
     try:
+        configure_google_ai()  # Ensure Google AI is configured
         model = genai.GenerativeModel("gemini-2.0-flash")
         prompt = f"""
         Evaluate this student's answer for the given question:
