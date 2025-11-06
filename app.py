@@ -159,8 +159,13 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Configure Google AI
-genai.configure(api_key=os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyBKYJLje8mR0VP5XxmrpG3PfXAleNXU_-c'))
+# Configure Google AI (with error handling)
+try:
+    google_api_key = os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyBKYJLje8mR0VP5XxmrpG3PfXAleNXU_-c')
+    genai.configure(api_key=google_api_key)
+except Exception as e:
+    print(f"Warning: Google AI configuration failed: {e}", file=sys.stderr)
+    # Continue without AI features if key is invalid
 
 # Database Models
 class User(UserMixin, db.Model):
