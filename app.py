@@ -35,12 +35,9 @@ try:
     from PIL import Image
     HAS_TESSERACT = True
     # Try to configure Tesseract path if not in PATH (common on Windows)
+    # Don't test tesseract during import - it might fail on Vercel
     try:
-        # Test if tesseract is accessible
-        pytesseract.get_tesseract_version()
-    except Exception:
-        # Common installation paths
-        import os
+        # Common installation paths - only set if file exists
         possible_paths = [
             r'C:\Program Files\Tesseract-OCR\tesseract.exe',
             r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
@@ -51,6 +48,9 @@ try:
             if os.path.exists(path):
                 pytesseract.pytesseract.tesseract_cmd = path
                 break
+    except Exception:
+        # Ignore tesseract configuration errors during import
+        pass
 except ImportError:
     HAS_TESSERACT = False
 
