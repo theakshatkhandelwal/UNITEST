@@ -549,6 +549,7 @@ def generate_quiz(topic, difficulty_level, question_type="mcq", num_questions=5)
         return None
 
     try:
+        configure_google_ai()  # Ensure Google AI is configured
         model = genai.GenerativeModel("gemini-2.0-flash")
         
         # Map difficulty levels to Bloom's taxonomy levels and descriptions
@@ -2377,6 +2378,7 @@ def ai_learn():
             return jsonify({'success': False, 'error': 'Topic is required'})
         
         # Generate learning content using AI
+        configure_google_ai()  # Ensure Google AI is configured
         model = genai.GenerativeModel("gemini-2.0-flash")
         prompt = f"""
         Create a personalized learning path for {topic} at {level} level, 
