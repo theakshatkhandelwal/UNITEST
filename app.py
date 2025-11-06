@@ -162,15 +162,23 @@ else:
     }
 
 # Initialize database with error handling to prevent crashes
+# Use lazy initialization - don't connect until actually needed
 try:
-    db = SQLAlchemy(app)
+    # Create SQLAlchemy instance without connecting
+    db = SQLAlchemy()
+    db.init_app(app)
+    # Don't connect to database during import - only when actually used
 except Exception as e:
     print(f"Error creating SQLAlchemy instance: {e}", file=sys.stderr)
     import traceback
     traceback.print_exc(file=sys.stderr)
     # Create minimal db to prevent crash
     db = SQLAlchemy()
-    db.init_app(app)
+    try:
+        db.init_app(app)
+    except Exception as e2:
+        print(f"Error initializing db with app: {e2}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
 
 # Initialize login manager with error handling
 try:
@@ -929,6 +937,28 @@ def health_check():
             "has_database_url": bool(os.environ.get('DATABASE_URL'))
         }
     })
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint - doesn't require database"""
+    try:
+        return jsonify({
+            'status': 'ok',
+            'app_loaded': True,
+            'environment': {
+                'has_secret_key': bool(os.environ.get('SECRET_KEY')),
+                'has_google_api': bool(os.environ.get('GOOGLE_AI_API_KEY')),
+                'has_database_url': bool(os.environ.get('DATABASE_URL')),
+                'vercel': bool(os.environ.get('VERCEL')),
+                'database_uri_set': bool(app.config.get('SQLALCHEMY_DATABASE_URI'))
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'type': type(e).__name__
+        }), 500
 
 @app.route('/init-db')
 def init_database():
