@@ -631,10 +631,8 @@ Return ONLY valid JSON array. Do NOT include any markdown code blocks, explanati
         return None
 
 def process_document(file_path):
-    """Process uploaded document to extract content - supports both text-based and image-based PDFs"""
+    """Process uploaded document to extract content - SIMPLIFIED FOR VERCEL"""
     try:
-        # Ensure NLTK data is available
-        ensure_nltk_data()
         
         content = ""
         if file_path.lower().endswith('.pdf'):
