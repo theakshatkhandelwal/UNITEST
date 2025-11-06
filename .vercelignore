@@ -31,18 +31,29 @@ nltk_data/
 *.docx
 *.doc
 
-# Exclude development files
+# Exclude development and documentation files
 .git/
 .github/
 README.md
-DEPLOYMENT_GUIDE.md
-RAILWAY_DEPLOYMENT_GUIDE.md
-VERCEL_DEPLOYMENT_GUIDE.md
-NEON_VERCEL_DEPLOYMENT.md
-GITHUB_PUSH_GUIDE.md
-SEO_OPTIMIZATION_SUMMARY.md
-VERCEL_ENV_SETUP.md
+*.md
+!vercel.json
 push_to_github.ps1
 deploy.py
 deploy_vercel.py
+deploy_vercel_optimized.ps1
 check_deployment.py
+
+# Exclude backup and test files
+requirements_full*.txt
+requirements_light.txt
+requirements_minimal.txt
+requirements_vercel_optimized.txt
+test_pdf_ocr.py
+test.txt
+
+# Exclude API variants (we only need api/index.py)
+api/index_light.py
+api/index_minimal.py
+api/index_vercel.py
+api/debug.py
+api/test.py
