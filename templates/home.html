@@ -2,110 +2,520 @@
 
 {% block title %}Unitest - AI-Powered Learning Platform | Smart Quiz Generator{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Modern Landing Page Styles */
+    .landing-hero {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+        min-height: 90vh;
+        display: flex;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .landing-hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(circle at 20% 50%, rgba(66, 133, 244, 0.1) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 80%, rgba(52, 168, 83, 0.1) 0%, transparent 50%);
+        pointer-events: none;
+    }
+    
+    .hero-content {
+        position: relative;
+        z-index: 1;
+    }
+    
+    .hero-title {
+        font-size: 4.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 1.5rem;
+        line-height: 1.1;
+    }
+    
+    .hero-subtitle {
+        font-size: 1.5rem;
+        color: #cbd5e1;
+        margin-bottom: 2rem;
+        font-weight: 300;
+    }
+    
+    .hero-description {
+        font-size: 1.1rem;
+        color: #94a3b8;
+        max-width: 700px;
+        margin: 0 auto 3rem;
+        line-height: 1.7;
+    }
+    
+    .cta-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .btn-hero-primary {
+        background: linear-gradient(135deg, #4285f4 0%, #1a73e8 100%);
+        border: none;
+        padding: 1rem 2.5rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border-radius: 12px;
+        color: white;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(66, 133, 244, 0.4);
+    }
+    
+    .btn-hero-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(66, 133, 244, 0.6);
+        color: white;
+    }
+    
+    .btn-hero-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        padding: 1rem 2.5rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border-radius: 12px;
+        color: white;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+    
+    .btn-hero-secondary:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-2px);
+        color: white;
+    }
+    
+    .feature-cards-section {
+        background: #0f172a;
+        padding: 5rem 0;
+        position: relative;
+    }
+    
+    .section-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: white;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    
+    .section-subtitle {
+        font-size: 1.2rem;
+        color: #94a3b8;
+        text-align: center;
+        margin-bottom: 4rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .feature-card-large {
+        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        border-radius: 20px;
+        padding: 2.5rem;
+        height: 100%;
+        transition: all 0.4s ease;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .feature-card-large::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #4285f4, #34a853);
+        transform: scaleX(0);
+        transition: transform 0.4s ease;
+    }
+    
+    .feature-card-large:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        border-color: rgba(66, 133, 244, 0.5);
+    }
+    
+    .feature-card-large:hover::before {
+        transform: scaleX(1);
+    }
+    
+    .feature-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        margin-bottom: 1.5rem;
+        background: linear-gradient(135deg, rgba(66, 133, 244, 0.2), rgba(52, 168, 83, 0.2));
+    }
+    
+    .feature-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: white;
+        margin-bottom: 1rem;
+    }
+    
+    .feature-description {
+        color: #cbd5e1;
+        line-height: 1.7;
+        font-size: 1rem;
+    }
+    
+    .stats-section {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        padding: 4rem 0;
+    }
+    
+    .stat-card {
+        text-align: center;
+        padding: 2rem;
+    }
+    
+    .stat-number {
+        font-size: 3rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #4285f4, #34a853);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        color: #94a3b8;
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+    
+    .trending-section {
+        background: #0f172a;
+        padding: 5rem 0;
+    }
+    
+    .trending-card {
+        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        height: 100%;
+    }
+    
+    .trending-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        border-color: rgba(66, 133, 244, 0.5);
+    }
+    
+    .trending-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #4285f4, #34a853);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    .how-it-works-section {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        padding: 5rem 0;
+    }
+    
+    .step-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 2rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .step-card:hover {
+        background: rgba(255, 255, 255, 0.08);
+        transform: translateX(10px);
+    }
+    
+    .step-number {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #4285f4, #34a853);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+    }
+    
+    .scroll-indicator {
+        position: absolute;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba(255, 255, 255, 0.6);
+        animation: bounce 2s infinite;
+    }
+    
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateX(-50%) translateY(0);
+        }
+        40% {
+            transform: translateX(-50%) translateY(-10px);
+        }
+        60% {
+            transform: translateX(-50%) translateY(-5px);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .hero-title {
+            font-size: 2.5rem;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.2rem;
+        }
+        
+        .section-title {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="hero-section">
-    <div class="container text-center">
-        <h1 class="display-3 fw-bold mb-4">
-            <i class="fas fa-graduation-cap me-3"></i>Unitest - AI Learning Platform
-        </h1>
-        <p class="lead mb-4">The Ultimate AI-Powered Learning and Assessment Platform - Search "Unitest" for Smart Quiz Generation</p>
-        <p class="mb-5">Transform your learning experience with personalized AI-generated quizzes, intelligent assessment, and Bloom's taxonomy-based progression. Unitest uses Google Gemini AI to create smart, adaptive learning experiences for students and teachers worldwide. Search "unitest" to discover the best AI-powered quiz platform.</p>
-        {% if not current_user.is_authenticated %}
-            <a href="{{ url_for('signup') }}" class="btn btn-light btn-lg me-3">
-                <i class="fas fa-rocket me-2"></i>Get Started
-            </a>
-            <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-lg">
-                <i class="fas fa-sign-in-alt me-2"></i>Login
-            </a>
-        {% else %}
-            <a href="{{ url_for('dashboard') }}" class="btn btn-light btn-lg me-3">
-                <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
-            </a>
-            <a href="{{ url_for('quiz') }}" class="btn btn-outline-light btn-lg">
-                <i class="fas fa-question-circle me-2"></i>Start Learning
-            </a>
-        {% endif %}
+<!-- Hero Section -->
+<section class="landing-hero">
+    <div class="container">
+        <div class="hero-content text-center">
+            <div class="mb-4">
+                <i class="fas fa-graduation-cap" style="font-size: 4rem; color: #4285f4;"></i>
+            </div>
+            <h1 class="hero-title">UNITEST</h1>
+            <p class="hero-subtitle">Your AI-Powered Learning Companion</p>
+            <p class="hero-description">
+                Search UNITEST to discover the #1 AI-powered quiz generator. Transform your learning experience with personalized AI-generated quizzes, coding questions, and intelligent assessment powered by Google Gemini AI.
+            </p>
+            <div class="cta-buttons">
+                {% if not current_user.is_authenticated %}
+                    <a href="{{ url_for('signup') }}" class="btn btn-hero-primary">
+                        <i class="fas fa-rocket me-2"></i>Get Started
+                    </a>
+                    <a href="{{ url_for('login') }}" class="btn btn-hero-secondary">
+                        <i class="fas fa-sign-in-alt me-2"></i>Login
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-hero-primary">
+                        <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                    </a>
+                    <a href="{{ url_for('quiz') }}" class="btn btn-hero-secondary">
+                        <i class="fas fa-question-circle me-2"></i>Start Learning
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="scroll-indicator">
+        <i class="fas fa-chevron-down" style="font-size: 1.5rem;"></i>
     </div>
 </section>
 
-<section class="py-5">
+<!-- Feature Cards Section -->
+<section class="feature-cards-section">
     <div class="container">
-        <div class="row text-center mb-5">
-            <div class="col-lg-8 mx-auto">
-                <h2 class="display-5 fw-bold text-primary mb-3">Why Choose Unitest?</h2>
-                <p class="lead text-muted">Experience the future of education with cutting-edge AI technology. Unitest is the leading AI-powered learning platform that revolutionizes how students learn and teachers assess. Search "unitest" to find the best quiz generator.</p>
+        <h2 class="section-title">Why Choose UNITEST?</h2>
+        <p class="section-subtitle">
+            Experience the future of education with cutting-edge AI technology. Search "unitest" to find the best quiz generator.
+        </p>
+        
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card-large">
+                    <div class="feature-icon text-primary">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3 class="feature-title">AI-Generated Questions</h3>
+                    <p class="feature-description">
+                        Get intelligent, context-aware questions generated by advanced AI models for any topic you want to learn.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card-large">
+                    <div class="feature-icon text-success">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="feature-title">Bloom's Taxonomy</h3>
+                    <p class="feature-description">
+                        Progress through different cognitive levels from basic remembering to advanced analysis and creation.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card-large">
+                    <div class="feature-icon text-warning">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <h3 class="feature-title">Smart Assessment</h3>
+                    <p class="feature-description">
+                        AI-powered evaluation of subjective answers with instant feedback and detailed scoring.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card-large">
+                    <div class="feature-icon text-info">
+                        <i class="fas fa-code"></i>
+                    </div>
+                    <h3 class="feature-title">Coding Questions</h3>
+                    <p class="feature-description">
+                        Practice coding with real-time execution, test cases, and support for multiple programming languages.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card-large">
+                    <div class="feature-icon text-danger">
+                        <i class="fas fa-file-upload"></i>
+                    </div>
+                    <h3 class="feature-title">Document Upload</h3>
+                    <p class="feature-description">
+                        Upload your study materials and let AI extract topics to create relevant quizzes automatically.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card-large">
+                    <div class="feature-icon text-secondary">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <h3 class="feature-title">Progress Tracking</h3>
+                    <p class="feature-description">
+                        Monitor your learning journey with detailed analytics and progress visualization across topics.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Section -->
+<section class="stats-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-3 col-6">
+                <div class="stat-card">
+                    <div class="stat-number">10K+</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card">
+                    <div class="stat-number">50K+</div>
+                    <div class="stat-label">Quizzes Created</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card">
+                    <div class="stat-number">100+</div>
+                    <div class="stat-label">Topics Covered</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card">
+                    <div class="stat-number">99%</div>
+                    <div class="stat-label">Satisfaction Rate</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Trending/Popular Section -->
+<section class="trending-section">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="section-title mb-0" style="text-align: left;">Trending Features</h2>
+            <div>
+                <button class="btn btn-hero-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <i class="fas fa-arrow-left me-2"></i>
+                </button>
+                <button class="btn btn-hero-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <i class="fas fa-arrow-right ms-2"></i>
+                </button>
             </div>
         </div>
         
         <div class="row g-4">
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 feature-card text-center p-4">
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <i class="fas fa-brain fa-3x text-primary"></i>
-                        </div>
-                        <h5 class="card-title fw-bold">AI-Generated Questions</h5>
-                        <p class="card-text">Get intelligent, context-aware questions generated by advanced AI models for any topic you want to learn.</p>
+            <div class="col-md-4">
+                <div class="trending-card">
+                    <span class="trending-badge">
+                        <i class="fas fa-fire me-1"></i>Popular
+                    </span>
+                    <h4 class="text-white mb-3">AI Quiz Generation</h4>
+                    <p class="text-muted mb-3">Generate unlimited quizzes on any topic with Google Gemini AI</p>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-users text-primary me-2"></i>
+                        <span class="text-white">8,245 active</span>
                     </div>
                 </div>
             </div>
             
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 feature-card text-center p-4">
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <i class="fas fa-chart-line fa-3x text-success"></i>
-                        </div>
-                        <h5 class="card-title fw-bold">Bloom's Taxonomy</h5>
-                        <p class="card-text">Progress through different cognitive levels from basic remembering to advanced analysis and creation.</p>
+            <div class="col-md-4">
+                <div class="trending-card">
+                    <span class="trending-badge">
+                        <i class="fas fa-star me-1"></i>Featured
+                    </span>
+                    <h4 class="text-white mb-3">Coding Practice</h4>
+                    <p class="text-muted mb-3">Practice coding with real-time execution and test cases</p>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-users text-success me-2"></i>
+                        <span class="text-white">6,892 active</span>
                     </div>
                 </div>
             </div>
             
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 feature-card text-center p-4">
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <i class="fas fa-robot fa-3x text-warning"></i>
-                        </div>
-                        <h5 class="card-title fw-bold">Smart Assessment</h5>
-                        <p class="card-text">AI-powered evaluation of subjective answers with instant feedback and detailed scoring.</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 feature-card text-center p-4">
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <i class="fas fa-file-upload fa-3x text-info"></i>
-                        </div>
-                        <h5 class="card-title fw-bold">Document Upload</h5>
-                        <p class="card-text">Upload your study materials and let AI extract topics to create relevant quizzes automatically.</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 feature-card text-center p-4">
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <i class="fas fa-tasks fa-3x text-danger"></i>
-                        </div>
-                        <h5 class="card-title fw-bold">Multiple Question Types</h5>
-                        <p class="card-text">Choose from MCQ, subjective questions, or a combination of both for comprehensive learning.</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 feature-card text-center p-4">
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <i class="fas fa-chart-bar fa-3x text-secondary"></i>
-                        </div>
-                        <h5 class="card-title fw-bold">Progress Tracking</h5>
-                        <p class="card-text">Monitor your learning journey with detailed analytics and progress visualization across topics.</p>
+            <div class="col-md-4">
+                <div class="trending-card">
+                    <span class="trending-badge">
+                        <i class="fas fa-trending-up me-1"></i>Trending
+                    </span>
+                    <h4 class="text-white mb-3">Smart Assessment</h4>
+                    <p class="text-muted mb-3">AI-powered evaluation with instant feedback</p>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-users text-warning me-2"></i>
+                        <span class="text-white">5,123 active</span>
                     </div>
                 </div>
             </div>
@@ -113,121 +523,55 @@
     </div>
 </section>
 
-<section class="py-5 bg-light">
+<!-- How It Works Section -->
+<section class="how-it-works-section">
     <div class="container">
-        <div class="row align-items-center">
-            <div class="col-lg-6">
-                <h2 class="display-6 fw-bold text-primary mb-4">How It Works</h2>
-                <div class="d-flex mb-3">
-                    <div class="flex-shrink-0">
-                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                            <span class="fw-bold">1</span>
-                        </div>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h5>Choose Your Topic</h5>
-                        <p class="text-muted">Enter any subject or topic you want to learn about, or upload study materials for automatic topic extraction.</p>
-                    </div>
-                </div>
-                
-                <div class="d-flex mb-3">
-                    <div class="flex-shrink-0">
-                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                            <span class="fw-bold">2</span>
-                        </div>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h5>AI Generates Questions</h5>
-                        <p class="text-muted">Our advanced AI creates personalized questions based on your chosen topic and current learning level.</p>
-                    </div>
-                </div>
-                
-                <div class="d-flex mb-3">
-                    <div class="flex-shrink-0">
-                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                            <span class="fw-bold">3</span>
-                        </div>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h5>Take the Quiz</h5>
-                        <p class="text-muted">Answer questions and get instant feedback. AI evaluates subjective answers for comprehensive assessment.</p>
-                    </div>
-                </div>
-                
-                <div class="d-flex">
-                    <div class="flex-shrink-0">
-                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                            <span class="fw-bold">4</span>
-                        </div>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h5>Track Progress</h5>
-                        <p class="text-muted">Monitor your learning journey and advance through Bloom's Taxonomy levels as you improve.</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-lg-6 text-center">
-                <div class="bg-white p-5 rounded-3 shadow">
-                    <i class="fas fa-laptop-code fa-5x text-primary mb-4"></i>
-                    <h4 class="fw-bold mb-3">Ready to Start Learning?</h4>
-                    <p class="text-muted mb-4">Join thousands of students already using UniTest to enhance their learning experience.</p>
-                    {% if not current_user.is_authenticated %}
-                        <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
-                            <i class="fas fa-user-plus me-2"></i>Create Free Account
-                        </a>
-                    {% else %}
-                        <a href="{{ url_for('quiz') }}" class="btn btn-primary btn-lg">
-                            <i class="fas fa-play me-2"></i>Start Your First Quiz
-                        </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="py-5">
-    <div class="container text-center">
-        <h2 class="display-6 fw-bold text-primary mb-4">Join the Learning Revolution</h2>
-        <p class="lead text-muted mb-5">Experience personalized, AI-powered education that adapts to your learning style</p>
+        <h2 class="section-title">How It Works</h2>
+        <p class="section-subtitle">
+            Get started in minutes and transform your learning experience
+        </p>
         
-        <div class="row g-4 justify-content-center">
-            <div class="col-md-4">
-                <div class="text-center">
-                    <i class="fas fa-users fa-3x text-primary mb-3"></i>
-                    <h4 class="fw-bold">Community</h4>
-                    <p class="text-muted">Join a community of learners and educators</p>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h4 class="text-white mb-3">Choose Your Topic</h4>
+                    <p class="text-muted">Enter any subject or topic you want to learn about, or upload study materials for automatic topic extraction.</p>
                 </div>
             </div>
             
-            <div class="col-md-4">
-                <div class="text-center">
-                    <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
-                    <h4 class="fw-bold">Secure</h4>
-                    <p class="text-muted">Your data and progress are always protected</p>
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h4 class="text-white mb-3">AI Generates Questions</h4>
+                    <p class="text-muted">Our advanced AI creates personalized questions based on your chosen topic and current learning level.</p>
                 </div>
             </div>
             
-            <div class="col-md-4">
-                <div class="text-center">
-                    <i class="fas fa-mobile-alt fa-3x text-warning mb-3"></i>
-                    <h4 class="fw-bold">Responsive</h4>
-                    <p class="text-muted">Learn anywhere, anytime on any device</p>
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h4 class="text-white mb-3">Take the Quiz</h4>
+                    <p class="text-muted">Answer questions and get instant feedback. AI evaluates subjective answers for comprehensive assessment.</p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <h4 class="text-white mb-3">Track Progress</h4>
+                    <p class="text-muted">Monitor your learning journey and advance through Bloom's Taxonomy levels as you improve.</p>
                 </div>
             </div>
         </div>
         
-        <div class="mt-5">
+        <div class="text-center mt-5">
             {% if not current_user.is_authenticated %}
-                <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg me-3">
+                <a href="{{ url_for('signup') }}" class="btn btn-hero-primary btn-lg">
                     <i class="fas fa-rocket me-2"></i>Get Started Now
                 </a>
-                <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg">
-                    <i class="fas fa-sign-in-alt me-2"></i>Already Have Account?
-                </a>
             {% else %}
-                <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-hero-primary btn-lg">
                     <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
                 </a>
             {% endif %}
@@ -236,44 +580,54 @@
 </section>
 
 <!-- SEO-Optimized Content Section -->
-<section class="py-5 bg-light">
+<section class="feature-cards-section">
     <div class="container">
         <div class="row">
             <div class="col-lg-8 mx-auto text-center">
-                <h2 class="display-6 fw-bold text-primary mb-4">What is Unitest?</h2>
-                <p class="lead mb-4">Unitest is a revolutionary AI-powered learning platform that transforms education through intelligent quiz generation and personalized assessment. Built with Google Gemini AI, Unitest creates adaptive learning experiences that help students master any subject. Search "unitest" to discover the #1 AI quiz platform.</p>
+                <h2 class="section-title">What is Unitest?</h2>
+                <p class="section-subtitle">
+                    Unitest is a revolutionary AI-powered learning platform that transforms education through intelligent quiz generation and personalized assessment. Built with Google Gemini AI, Unitest creates adaptive learning experiences that help students master any subject. Search "unitest" to discover the #1 AI quiz platform.
+                </p>
                 
                 <div class="row g-4 mt-4">
                     <div class="col-md-6">
-                        <h4 class="fw-bold text-primary">For Students</h4>
-                        <p class="text-muted">Get personalized quizzes on any topic, track your learning progress, and master subjects with AI-powered feedback and Bloom's taxonomy progression.</p>
+                        <div class="feature-card-large">
+                            <h4 class="feature-title">For Students</h4>
+                            <p class="feature-description">
+                                Get personalized quizzes on any topic, track your learning progress, and master subjects with AI-powered feedback and Bloom's taxonomy progression.
+                            </p>
+                        </div>
                     </div>
                     <div class="col-md-6">
-                        <h4 class="fw-bold text-primary">For Teachers</h4>
-                        <p class="text-muted">Create comprehensive assessments, upload PDF materials, set difficulty levels, and monitor student progress with detailed analytics and integrity tracking.</p>
+                        <div class="feature-card-large">
+                            <h4 class="feature-title">For Teachers</h4>
+                            <p class="feature-description">
+                                Create comprehensive assessments, upload PDF materials, set difficulty levels, and monitor student progress with detailed analytics and integrity tracking.
+                            </p>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="mt-5">
-                    <h3 class="fw-bold mb-3">Unitest Features</h3>
+                    <h3 class="text-white mb-4">Unitest Features</h3>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <span class="badge bg-primary fs-6 p-2">AI Quiz Generation</span>
+                            <span class="badge bg-primary fs-6 p-3" style="border-radius: 12px;">AI Quiz Generation</span>
                         </div>
                         <div class="col-md-4">
-                            <span class="badge bg-success fs-6 p-2">Bloom's Taxonomy</span>
+                            <span class="badge bg-success fs-6 p-3" style="border-radius: 12px;">Bloom's Taxonomy</span>
                         </div>
                         <div class="col-md-4">
-                            <span class="badge bg-info fs-6 p-2">PDF Processing</span>
+                            <span class="badge bg-info fs-6 p-3" style="border-radius: 12px;">PDF Processing</span>
                         </div>
                         <div class="col-md-4">
-                            <span class="badge bg-warning fs-6 p-2">Progress Tracking</span>
+                            <span class="badge bg-warning fs-6 p-3" style="border-radius: 12px;">Progress Tracking</span>
                         </div>
                         <div class="col-md-4">
-                            <span class="badge bg-danger fs-6 p-2">Smart Assessment</span>
+                            <span class="badge bg-danger fs-6 p-3" style="border-radius: 12px;">Smart Assessment</span>
                         </div>
                         <div class="col-md-4">
-                            <span class="badge bg-secondary fs-6 p-2">Real-time Analytics</span>
+                            <span class="badge bg-secondary fs-6 p-3" style="border-radius: 12px;">Real-time Analytics</span>
                         </div>
                     </div>
                 </div>
